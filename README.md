@@ -38,30 +38,34 @@ Server runs on stdio transport
 
 
 
-🛠️ Available Tools
+## 🛠️ Available Tools
 
--> search_api_examples(query: str)
+### `search_api_examples(query: str)`
+
 Search through 8,154+ ESAPI examples using natural language:
 
-python# Example queries:
+```python
+# Example queries:
 search_api_examples("how to get DVH data")
 search_api_examples("calculate dose statistics")
 search_api_examples("access beam parameters")
 search_api_examples("patient plan information")
+```
 
+### `get_esapi_template(script_type: str)`
 
--> get_esapi_template(script_type: str)
 Get code templates for different ESAPI script types:
 
+```python
 get_esapi_template("single_file")      # Simple .cs file
 get_esapi_template("binary_plugin")    # Plugin with .cs + .csproj
 get_esapi_template("executable_script") # Standalone executable
 get_esapi_template("list")             # Show all available types
+```
 
--> check_model_status()
+### `check_model_status()`
 
 Check if the embedding model has finished loading.
-
 
 📁 Project Structure
 
