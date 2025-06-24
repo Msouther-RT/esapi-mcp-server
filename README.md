@@ -38,33 +38,38 @@ Server runs on stdio transport
 
 
 
-🛠️ Available Tools
+## 🛠️ Available Tools
 
--> search_api_examples(query: str)
+### `search_api_examples(query: str)`
+
 Search through 8,154+ ESAPI examples using natural language:
 
-python# Example queries:
+```python
+# Example queries:
 search_api_examples("how to get DVH data")
 search_api_examples("calculate dose statistics")
 search_api_examples("access beam parameters")
 search_api_examples("patient plan information")
+```
 
+### `get_esapi_template(script_type: str)`
 
--> get_esapi_template(script_type: str)
 Get code templates for different ESAPI script types:
 
+```python
 get_esapi_template("single_file")      # Simple .cs file
 get_esapi_template("binary_plugin")    # Plugin with .cs + .csproj
 get_esapi_template("executable_script") # Standalone executable
 get_esapi_template("list")             # Show all available types
+```
 
--> check_model_status()
+### `check_model_status()`
 
 Check if the embedding model has finished loading.
 
+## 📁 Project Structure
 
-📁 Project Structure
-
+```
 esapi-mcp-server/
 ├── src/
 │   ├── mcp_server.py           # Main MCP server
@@ -80,12 +85,14 @@ esapi-mcp-server/
 │   └── instruction_embeddings.pkl  # Vector embeddings
 ├── data/                      # Training data
 └── pyproject.toml             # Project configuration
+```
 
 
-🔧 Development
+## 🔧 Development
 
-This project uses UV for fast dependency management.
+This project uses [UV](https://docs.astral.sh/uv/) for fast dependency management.
 
+```bash
 # Install development dependencies
 uv sync --dev
 
@@ -94,44 +101,42 @@ uv run python src/mcp_server.py
 
 # Generate new embeddings (if needed)
 uv run python src/embed_instructions.py
+```
 
+## 📊 Dataset
 
+- **8,154+ ESAPI examples** from comprehensive documentation (16.1 Libraries)
+- **Semantic embeddings** using Qwen/Qwen3-Embedding-0.6B model
+- **Real API calls** with accurate parameters and return types
+- **Multiple script patterns** covering common ESAPI use cases
 
-📊 Dataset
+## 🎯 Use Cases
 
-8,154+ ESAPI examples from comprehensive documentation
-
-Semantic embeddings using Qwen/Qwen3-Embedding-0.6B model
-
-Real API calls with accurate parameters and return types
-
-Multiple script patterns covering common ESAPI use cases
-
-🎯 Use Cases
 Perfect for medical physicists and developers working with:
 
-Treatment planning automation
-Dose analysis scripts
-Quality assurance tools
-Research applications
-Educational projects
+- Treatment planning automation
+- Dose analysis scripts
+- Quality assurance tools
+- Research applications
+- Educational projects
 
-🤝 Contributing
+## 🤝 Contributing
+
 Contributions welcome! Areas for improvement:
 
-Additional ESAPI examples
-New script templates
-Documentation improvements
-Performance optimizations
+- Additional ESAPI examples
+- New script templates
+- Documentation improvements
+- Performance optimizations
 
-📄 License
+## 📄 License
 
 MIT License - feel free to use in your medical physics workflows.
 
-
-🙏 Acknowledgments
+## 🙏 Acknowledgments
 
 Built for the medical physics community to improve ESAPI development experience and reduce API documentation friction.
 
-Note: This tool provides accurate ESAPI documentation but always validate scripts in a safe testing environment before clinical use.
+---
 
+**Note**: This tool provides accurate ESAPI documentation but always validate scripts in a safe testing environment before clinical use.
