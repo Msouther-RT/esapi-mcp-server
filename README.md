@@ -2,6 +2,78 @@
 
 A Model Context Protocol (MCP) server that provides AI language models with accurate ESAPI (Eclipse Scripting API) documentation and code templates, eliminating API hallucination issues.
 
+
+## 🖥️ Claude Desktop Setup
+
+This server is designed to work with [Claude Desktop](https://claude.ai/download) using the Model Context Protocol (MCP). Follow these steps to connect:
+
+### Prerequisites
+- [Claude Desktop](https://claude.ai/download) installed
+- This ESAPI MCP Server running locally
+
+### Configuration Steps
+
+1. **Download and Install Claude Desktop**
+   - Visit [claude.ai/download](https://claude.ai/download)
+   - Install Claude Desktop for your operating system
+
+2. **Locate Claude Desktop Config File**
+   - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+3. **Add ESAPI MCP Server Configuration**
+   
+   Edit the config file and add the following (adjust paths to your setup):
+
+   **Windows Example:**
+   ```json
+   {
+     "mcpServers": {
+       "esapi_mcp": {
+         "command": "C:\\path\\to\\your\\project\\esapi-mcp-server\\.venv\\Scripts\\python.exe",
+         "args": ["C:\\path\\to\\your\\project\\esapi-mcp-server\\src\\mcp_server.py"],
+         "cwd": "C:\\path\\to\\your\\project\\esapi-mcp-server",
+         "env": {},
+         "timeout": 120000
+       }
+     }
+   }
+   ```
+
+   **macOS/Linux Example:**
+   ```json
+   {
+     "mcpServers": {
+       "esapi_mcp": {
+         "command": "/path/to/your/project/esapi-mcp-server/.venv/bin/python",
+         "args": ["/path/to/your/project/esapi-mcp-server/src/mcp_server.py"],
+         "cwd": "/path/to/your/project/esapi-mcp-server",
+         "env": {},
+         "timeout": 120000
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop**
+   - Close Claude Desktop completely
+   - Reopen Claude Desktop
+   - The ESAPI MCP tools should now be available
+
+
+### Troubleshooting
+
+- **Tools not appearing**: Check that file paths in config are correct and use forward slashes or escaped backslashes
+- **Server not starting**: Ensure the virtual environment is properly set up with `uv sync`
+- **Permission errors**: Make sure Claude Desktop has permission to execute Python in your project directory
+- **Timeout errors**: Increase the timeout value if the embedding model takes longer to load
+
+### Learn More
+
+For detailed MCP setup instructions, see: [Model Context Protocol Documentation](https://modelcontextprotocol.io/docs/getting-started)
+
+
 ## 🚀 Features
 
 - 🔍 **Semantic API Search**: Find relevant ESAPI examples using natural language queries
