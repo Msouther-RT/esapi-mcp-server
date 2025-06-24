@@ -122,7 +122,11 @@ Perfect for medical physicists and developers working with:
 
 ## 🤝 Contributing
 
-Contributions welcome! Areas for improvement:
+This Repo is new, as a result it will have areas for vast improvement.
+
+I plan to continually improve and enhance this repo when I have time to dedicate to it.
+
+That being said, contributions are welcome, and encouraged! Areas for improvement:
 
 - Additional ESAPI examples
 - New script templates
