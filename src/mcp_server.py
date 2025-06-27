@@ -2,34 +2,44 @@ import pickle
 import numpy as np
 import sys
 import asyncio
-import threading
-from sentence_transformers import SentenceTransformer
+import os
+import openai
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Initialize FastMCP server with a descriptive name
 mcp = FastMCP("api_rag")
 
 # Global variables to store our embeddings and metadata
-model = None           # The sentence transformer model for embedding queries
 embeddings = None      # Pre-computed embeddings of all API instructions
 metadata = None        # The original instructions and their JSON responses
-model_loading = True   # Flag to track if model is still loading
-loading_error = None   # Store any loading errors
 
-def load_model_async():
-    """Load the model in a background thread to avoid blocking server startup"""
-    global model, model_loading, loading_error
+def load_env():
+    """Load environment variables from .env file"""
+    # Get the directory where this script is located
+    script_dir = Path(__file__).parent
+    # Go up one level to project root where .env should be
+    project_root = script_dir.parent
+    env_file = project_root / '.env'
     
-    try:
-        print("Loading embedding model in background...", file=sys.stderr)
-        model = SentenceTransformer("Qwen/Qwen3-Embedding-0.6B")
-        print("Embedding model loaded successfully!", file=sys.stderr)
-        model_loading = False
-    except Exception as e:
-        loading_error = str(e)
-        model_loading = False
-        print(f"Error loading model: {e}", file=sys.stderr)
+    print(f"Script directory: {script_dir}", file=sys.stderr)
+    print(f"Project root: {project_root}", file=sys.stderr)
+    print(f"Looking for .env file at: {env_file.absolute()}", file=sys.stderr)
+    
+    if env_file.exists():
+        print("Found .env file, loading...", file=sys.stderr)
+        with open(env_file) as f:
+            for line in f:
+                line = line.strip()
+                if '=' in line and not line.startswith('#'):
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+                    print(f"Loaded env var: {key}=***", file=sys.stderr)
+    else:
+        print("No .env file found!", file=sys.stderr)
+        print(f"Current working directory: {Path.cwd()}", file=sys.stderr)
+        print(f"Files in current directory: {list(Path.cwd().iterdir())}", file=sys.stderr)
 
 def load_embeddings_and_metadata(embeddings_dir="embeddings"):
     """
@@ -75,6 +85,29 @@ def load_embeddings_and_metadata(embeddings_dir="embeddings"):
     print(f"Successfully loaded {len(metadata['instructions'])} API examples", file=sys.stderr)
     return True
 
+def get_query_embedding(query: str, model="text-embedding-3-small"):
+    """
+    Get embedding for a query using OpenAI API
+    
+    Args:
+        query: The query text to embed
+        model: OpenAI model to use
+    
+    Returns:
+        numpy array containing the embedding vector
+    """
+    try:
+        response = openai.embeddings.create(
+            model=model,
+            input=[query],
+            encoding_format="float"
+        )
+        embedding = np.array(response.data[0].embedding)
+        return embedding.reshape(1, -1)  # Reshape for sklearn compatibility
+    except Exception as e:
+        print(f"Error getting OpenAI embedding: {e}", file=sys.stderr)
+        raise
+
 def find_similar_examples(query: str, top_k=3):
     """
     Find the most similar API examples to the user's query.
@@ -86,15 +119,12 @@ def find_similar_examples(query: str, top_k=3):
     Returns:
         List of dictionaries containing the most relevant API documentation
     """
-    # Step 1: Embed the incoming query using the same model
+    # Step 1: Embed the incoming query using OpenAI
     print(f"Embedding query: {query}", file=sys.stderr)
-    query_embedding = model.encode([query], prompt_name="query")
+    query_embedding = get_query_embedding(query)
     
-    # Step 2: Calculate similarity between query and all pre-computed embeddings
-    similarities = model.similarity(query_embedding, embeddings)
-    
-    # Convert to numpy array and flatten to handle any shape issues
-    similarities = np.array(similarities).flatten()
+    # Step 2: Calculate cosine similarity between query and all pre-computed embeddings
+    similarities = cosine_similarity(query_embedding, embeddings).flatten()
     
     # Step 3: Get the indices of the most similar examples
     top_indices = np.argsort(similarities)[-top_k:][::-1]
@@ -136,16 +166,17 @@ async def search_api_examples(query: str) -> str:
     Returns:
         Formatted string containing the most relevant API examples with their JSON documentation
     """
-    # Check if model is still loading
-    if model_loading:
-        return "🔄 The embedding model is still loading in the background. Please wait a moment and try again."
+    # Debug: Check API key status
+    api_key_env = os.getenv('OPENAI_API_KEY')
+    print(f"API key from env: {'Found' if api_key_env else 'Not found'}", file=sys.stderr)
+    print(f"OpenAI client API key: {'Set' if openai.api_key else 'Not set'}", file=sys.stderr)
     
-    # Check if there was a loading error
-    if loading_error:
-        return f"❌ Error loading the embedding model: {loading_error}. Please restart the server."
+    # Check for OpenAI API key
+    if not openai.api_key and not os.getenv('OPENAI_API_KEY'):
+        return "❌ Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
     
     # Make sure embeddings are loaded
-    if embeddings is None or metadata is None or model is None:
+    if embeddings is None or metadata is None:
         return "❌ Error: Embeddings not loaded. Please restart the server."
     
     try:
@@ -173,23 +204,38 @@ async def search_api_examples(query: str) -> str:
 @mcp.tool()
 async def check_model_status() -> str:
     """
-    Check the current status of the embedding model loading.
+    Check the current status of the embedding system.
     
     Returns:
-        Status message indicating whether the model is ready, loading, or encountered an error
+        Status message indicating whether the system is ready
     """
-    if model_loading:
-        return "🔄 Embedding model is still loading..."
-    elif loading_error:
-        return f"❌ Model loading failed: {loading_error}"
-    elif model is not None:
-        return "✅ Embedding model is ready!"
-    else:
-        return "❓ Unknown model status"
+    status_parts = []
     
+    if embeddings is not None and metadata is not None:
+        status_parts.append("✅ Embeddings loaded successfully!")
+        status_parts.append(f"📊 Dataset: {len(metadata['instructions'])} examples")
+        if 'model_name' in metadata:
+            status_parts.append(f"🤖 Model: {metadata['model_name']}")
+        if 'embedding_provider' in metadata:
+            status_parts.append(f"🔗 Provider: {metadata['embedding_provider']}")
+    else:
+        status_parts.append("❌ Embeddings not loaded")
+    
+    # Debug API key
+    api_key_env = os.getenv('OPENAI_API_KEY')
+    if api_key_env:
+        status_parts.append(f"🔑 OpenAI API key configured (ends with: ...{api_key_env[-4:]})")
+    else:
+        status_parts.append("❌ OpenAI API key not configured")
+    
+    status_parts.append(f"📁 Working directory: {Path.cwd()}")
+    env_file = Path('.env')
+    status_parts.append(f"📄 .env file exists: {env_file.exists()}")
+    
+    return "\n".join(status_parts)
 
-# Add this to your existing script after the other global variables
-templates = None  # Will store loaded templates
+# Template loading functions (unchanged from your original)
+templates = None
 
 def load_templates(templates_dir="templates"):
     """
@@ -298,11 +344,21 @@ async def get_esapi_template(script_type: str = "single_file") -> str:
     
     return "\n".join(result_parts)
 
-
-
 if __name__ == "__main__":
+    # Load environment variables FIRST
+    print("Loading environment variables...", file=sys.stderr)
+    load_env()
+    
     # Load embeddings and metadata first (fast operation)
-    print("Starting API RAG MCP server...", file=sys.stderr)
+    print("Starting API RAG MCP server with OpenAI embeddings...", file=sys.stderr)
+    
+    # Check for OpenAI API key
+    api_key = os.getenv('OPENAI_API_KEY')
+    if not api_key:
+        print("WARNING: OPENAI_API_KEY environment variable not set.", file=sys.stderr)
+        print("The server will start but search functionality will not work.", file=sys.stderr)
+    else:
+        print(f"OpenAI API key loaded (ends with: ...{api_key[-4:]})", file=sys.stderr)
     
     # Get the directory where this script is located
     script_dir = Path(__file__).parent
@@ -325,12 +381,6 @@ if __name__ == "__main__":
     # Load templates
     load_templates(str(templates_dir))
     
-    # Start loading the model in a background thread
-    print("Starting model loading in background thread...", file=sys.stderr)
-    model_thread = threading.Thread(target=load_model_async, daemon=True)
-    model_thread.start()
-    
-    # Start the MCP server immediately (model will load in background)
-    print("MCP server ready. Model loading in background...", file=sys.stderr)
-    print("You can check model status using the 'check_model_status' tool.", file=sys.stderr)
+    # Start the MCP server
+    print("MCP server ready with OpenAI embeddings!", file=sys.stderr)
     mcp.run(transport='stdio')
