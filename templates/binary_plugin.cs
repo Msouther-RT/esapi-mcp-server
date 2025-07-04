@@ -28,7 +28,7 @@ namespace VMS.TPS
     public void Execute(ScriptContext context /*, System.Windows.Window window, ScriptEnvironment environment*/)
     {
       // TODO : Add here the code that is called when the script is launched from Eclipse.
-      // 
+      // The Eclipse environment runs a c# version 5.0. This means some c# functionality does not work. For example string interpolation requires string.Format("Hello, {0}!", name), not $.
       // Remember to use the following command if making changes
       // context.Patient.BeginModifications();
     }
