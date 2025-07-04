@@ -14,6 +14,10 @@ mcp = FastMCP("api_rag")
 # Global variables to store our embeddings and metadata
 embeddings = None      # Pre-computed embeddings of all API instructions
 metadata = None        # The original instructions and their JSON responses
+embeddings_semantic = None      # Pre-computed embeddings of all API instructions semantic
+metadata_semantic = None        # The original instructions and their JSON responses semantic
+embeddings_PropMeth = None      # Pre-computed embeddings of property/method instructions
+metadata_PropMeth = None        # The original property/method instructions and their JSON responses
 
 def load_env():
     """Load environment variables from .env file"""
@@ -49,7 +53,7 @@ def load_embeddings_and_metadata(embeddings_dir="embeddings"):
     Args:
         embeddings_dir: Directory containing the pickle files created by embed_dataset.py
     """
-    global embeddings, metadata
+    global embeddings, metadata, embeddings_semantic, metadata_semantic, embeddings_PropMeth, metadata_PropMeth
     
     # Convert string path to Path object for easier file handling
     embeddings_path = Path(embeddings_dir)
@@ -66,10 +70,30 @@ def load_embeddings_and_metadata(embeddings_dir="embeddings"):
         print(f"Error: Embeddings file not found: {embeddings_file}", file=sys.stderr)
         return False
     
+    embeddings_file_semantic = embeddings_path / "instruction_embeddings_semantic.pkl"
+    if not embeddings_file_semantic.exists():
+        print(f"Error: Embeddings_semantic file not found: {embeddings_file}", file=sys.stderr)
+        return False
+    
+    embeddings_file_PropMeth = embeddings_path / "instruction_embeddings_PropMeth.pkl"
+    if not embeddings_file_PropMeth.exists():
+        print(f"Error: Embeddings_PropMeth file not found: {embeddings_file_PropMeth}", file=sys.stderr)
+        return False
+    
     # Load the pre-computed embeddings (numpy array of vectors)
     print("Loading pre-computed embeddings...", file=sys.stderr)
     with open(embeddings_file, 'rb') as f:
         embeddings = pickle.load(f)
+
+    # Load the pre-computed embeddings (numpy array of vectors)
+    print("Loading pre-computed embeddings_semantic...", file=sys.stderr)
+    with open(embeddings_file_semantic, 'rb') as f:
+        embeddings_semantic = pickle.load(f)
+    
+    # Load the pre-computed embeddings (numpy array of vectors)
+    print("Loading pre-computed embeddings_PropMeth...", file=sys.stderr)
+    with open(embeddings_file_PropMeth, 'rb') as f:
+        embeddings_PropMeth = pickle.load(f)
     
     # Check if metadata file exists
     metadata_file = embeddings_path / "metadata.pkl"
@@ -77,12 +101,36 @@ def load_embeddings_and_metadata(embeddings_dir="embeddings"):
         print(f"Error: Metadata file not found: {metadata_file}", file=sys.stderr)
         return False
     
+    # Check if metadata file exists
+    metadata_file_semantic = embeddings_path / "metadata_semantic.pkl"
+    if not metadata_file_semantic.exists():
+        print(f"Error: Metadata_semantic file not found: {metadata_file_semantic}", file=sys.stderr)
+        return False
+    
+    # Check if metadata file exists
+    metadata_file_PropMeth = embeddings_path / "metadata_PropMeth.pkl"
+    if not metadata_file_PropMeth.exists():
+        print(f"Error: Metadata_PropMeth file not found: {metadata_file_PropMeth}", file=sys.stderr)
+        return False
+    
     # Load the metadata (original instructions and their JSON responses)
     print("Loading metadata...", file=sys.stderr)
     with open(metadata_file, 'rb') as f:
         metadata = pickle.load(f)
+
+    # Load the metadata (original instructions and their JSON responses)
+    print("Loading metadata_semantic...", file=sys.stderr)
+    with open(metadata_file_semantic, 'rb') as f:
+        metadata_semantic = pickle.load(f)
+    
+    # Load the metadata (original instructions and their JSON responses)
+    print("Loading metadata_PropMeth...", file=sys.stderr)
+    with open(metadata_file_PropMeth, 'rb') as f:
+        metadata_PropMeth = pickle.load(f)
     
     print(f"Successfully loaded {len(metadata['instructions'])} API examples", file=sys.stderr)
+    print(f"Successfully loaded {len(metadata_semantic['instructions'])} semantic API examples", file=sys.stderr)
+    print(f"Successfully loaded {len(metadata_PropMeth['instructions'])} property/method examples", file=sys.stderr)
     return True
 
 def get_query_embedding(query: str, model="text-embedding-3-small"):
@@ -106,6 +154,29 @@ def get_query_embedding(query: str, model="text-embedding-3-small"):
         return embedding.reshape(1, -1)  # Reshape for sklearn compatibility
     except Exception as e:
         print(f"Error getting OpenAI embedding: {e}", file=sys.stderr)
+        raise
+
+def get_query_embedding_semantic(query: str, model="text-embedding-3-small"):
+    """
+    Get embedding for a query using OpenAI API
+    
+    Args:
+        query: The query text to embed
+        model: OpenAI model to use
+    
+    Returns:
+        numpy array containing the embedding vector
+    """
+    try:
+        response = openai.embeddings.create(
+            model=model,
+            input=[query],
+            encoding_format="float"
+        )
+        embedding_semantic = np.array(response.data[0].embedding)
+        return embedding_semantic.reshape(1, -1)  # Reshape for sklearn compatibility
+    except Exception as e:
+        print(f"Error getting OpenAI embedding semantic: {e}", file=sys.stderr)
         raise
 
 def find_similar_examples(query: str, top_k=3):
@@ -146,22 +217,99 @@ def find_similar_examples(query: str, top_k=3):
     
     return results
 
+
+def find_similar_examples_semantic(query: str, top_k=3):
+    """
+    Find the most similar API examples to the user's query.
+    
+    Args:
+        query: The question/query from the LLM (e.g., "How to call Equals method?")
+        top_k: How many similar examples to return (default 3)
+    
+    Returns:
+        List of dictionaries containing the most relevant API documentation
+    """
+    # Step 1: Embed the incoming query using OpenAI
+    print(f"Embedding semantic query: {query}", file=sys.stderr)
+    query_embedding = get_query_embedding_semantic(query)
+    
+    # Step 2: Calculate cosine similarity between query and all pre-computed embeddings
+    similarities = cosine_similarity(query_embedding, embeddings_semantic).flatten()
+    
+    # Step 3: Get the indices of the most similar examples
+    top_indices = np.argsort(similarities)[-top_k:][::-1]
+    
+    # Step 4: Retrieve the actual API documentation for the most similar examples
+    results = []
+    for idx in top_indices:
+        similarity_score = float(similarities[idx])
+        instruction = metadata_semantic['instructions'][idx]
+        response = metadata_semantic['responses'][idx]
+        
+        results.append({
+            'instruction': instruction,
+            'response': response,
+            'similarity_score': similarity_score
+        })
+        
+        print(f"Found similar example: '{instruction}' (similarity: {similarity_score:.3f})", file=sys.stderr)
+    
+    return results
+
+def find_similar_examples_PropMeth(query: str, top_k=3):
+    """
+    Find the most similar property/method examples to the user's query.
+    
+    Args:
+        query: The question/query from the LLM (e.g., "Dose property information")
+        top_k: How many similar examples to return (default 3)
+    
+    Returns:
+        List of dictionaries containing the most relevant property/method documentation
+    """
+    # Step 1: Embed the incoming query using OpenAI
+    print(f"Embedding PropMeth query: {query}", file=sys.stderr)
+    query_embedding = get_query_embedding(query)
+    
+    # Step 2: Calculate cosine similarity between query and all pre-computed embeddings
+    similarities = cosine_similarity(query_embedding, embeddings_PropMeth).flatten()
+    
+    # Step 3: Get the indices of the most similar examples
+    top_indices = np.argsort(similarities)[-top_k:][::-1]
+    
+    # Step 4: Retrieve the actual property/method documentation for the most similar examples
+    results = []
+    for idx in top_indices:
+        similarity_score = float(similarities[idx])
+        instruction = metadata_PropMeth['instructions'][idx]
+        response = metadata_PropMeth['responses'][idx]
+        
+        results.append({
+            'instruction': instruction,
+            'response': response,
+            'similarity_score': similarity_score
+        })
+        
+        print(f"Found similar PropMeth example: '{instruction}' (similarity: {similarity_score:.3f})", file=sys.stderr)
+    
+    return results
+
 @mcp.tool()
 async def search_api_examples(query: str) -> str:
     """
-    Search for relevant API examples based on a natural language query.
+    Reqest targeted API documentation queries using natural language.
     
-    This tool takes a question about API usage and returns the 3 most relevant
+    This tool takes a question about a specific API usage and returns the 3 most relevant
     examples from the pre-trained dataset, formatted as JSON.
     
     Examples of good queries:
     - "how to get DVH data"
     - "tell me about the Patient class" 
-    - "how to access beam information"
-    - "working with dose volume histogram"
+    - "What is the PlanSetup.Beams property?"
+    - "What does EvaluationDose.DoseValueToVoxel do?"
     
     Args:
-        query: Natural language question about API usage (keep it simple and focused)
+        query: Natural language question about API usage (keep it simple and focused) using entire API call
     
     Returns:
         Formatted string containing the most relevant API examples with their JSON documentation
@@ -200,6 +348,113 @@ async def search_api_examples(query: str) -> str:
     except Exception as e:
         print(f"Error in search_api_examples: {str(e)}", file=sys.stderr)
         return f"Error processing query: {str(e)}"
+    
+
+@mcp.tool()
+async def general_query_semantic(query: str) -> str:
+    """
+    Search for relevant API examples based on a natural language query if specific API call is not known.
+    
+    This tool takes a general question and returns the 3 most relevant API
+    examples from the pre-trained dataset, formatted as JSON.
+    
+    Examples of good queries: 
+    - "What are the control points for the proton beam in the current treatment?"
+    - "How can I determine the number of fractions in a prescription?"
+    - "What data can I retrieve about the patient support angle operating limit?"
+    - "Is there a way to get the start date and time of a course?"
+    
+    Args:
+        query: Natural language question about more general query (keep it simple and focused)
+    
+    Returns:
+        Formatted string containing the most relevant API examples with their JSON documentation
+    """
+    # Debug: Check API key status
+    api_key_env = os.getenv('OPENAI_API_KEY')
+    print(f"API key from env: {'Found' if api_key_env else 'Not found'}", file=sys.stderr)
+    print(f"OpenAI client API key: {'Set' if openai.api_key else 'Not set'}", file=sys.stderr)
+    
+    # Check for OpenAI API key
+    if not openai.api_key and not os.getenv('OPENAI_API_KEY'):
+        return "❌ Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+    
+    # Make sure embeddings are loaded
+    if embeddings_semantic is None or metadata_semantic is None:
+        return "❌ Error: Embeddings not loaded. Please restart the server."
+    
+    try:
+        # Find the most similar API examples to the user's query
+        similar_examples = find_similar_examples_semantic(query, top_k=3)
+        
+        # Format the results for return to the LLM
+        result_parts = []
+        result_parts.append(f"Found {len(similar_examples)} relevant API examples for: '{query}'\n")
+        
+        # Add each similar example with its API documentation
+        for i, example in enumerate(similar_examples, 1):
+            result_parts.append(f"--- Example {i} (Similarity: {example['similarity_score']:.3f}) ---")
+            result_parts.append(f"Question: {example['instruction']}")
+            result_parts.append(f"API Documentation: {example['response']}")
+            result_parts.append("")  # Empty line for readability
+        
+        # Join all parts into a single string response
+        return "\n".join(result_parts)
+        
+    except Exception as e:
+        print(f"Error in search_api_examples: {str(e)}", file=sys.stderr)
+        return f"Error processing query: {str(e)}"
+
+@mcp.tool()
+async def search_property_method_details(query: str) -> str:
+    """
+    Search for detailed information about specific properties or methods.
+    
+    This tool takes a query about a specific property or method and returns detailed
+    information including type, parameters, usage examples, etc.
+    
+    Examples of good queries:
+    - "Dose property information"
+    - "BeamNumber.Number property details"
+    - "GetDose method information"
+    - "Patient.Name property"
+    - "PlanSetup.GetOptimizationSetup method details"
+    
+    Args:
+        query: Natural language question about a specific property or method
+    
+    Returns:
+        Formatted string containing detailed property/method documentation
+    """
+    # Check for OpenAI API key
+    if not openai.api_key and not os.getenv('OPENAI_API_KEY'):
+        return "❌ Error: OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+    
+    # Make sure embeddings are loaded
+    if embeddings_PropMeth is None or metadata_PropMeth is None:
+        return "❌ Error: Property/Method embeddings not loaded. Please restart the server."
+    
+    try:
+        # Find the most similar property/method examples to the user's query
+        similar_examples = find_similar_examples_PropMeth(query, top_k=3)
+        
+        # Format the results for return to the LLM
+        result_parts = []
+        result_parts.append(f"Found {len(similar_examples)} relevant property/method examples for: '{query}'\n")
+        
+        # Add each similar example with its detailed documentation
+        for i, example in enumerate(similar_examples, 1):
+            result_parts.append(f"--- Example {i} (Similarity: {example['similarity_score']:.3f}) ---")
+            result_parts.append(f"Query: {example['instruction']}")
+            result_parts.append(f"Details: {example['response']}")
+            result_parts.append("")  # Empty line for readability
+        
+        # Join all parts into a single string response
+        return "\n".join(result_parts)
+        
+    except Exception as e:
+        print(f"Error in search_property_method_details: {str(e)}", file=sys.stderr)
+        return f"Error processing query: {str(e)}"
 
 @mcp.tool()
 async def check_model_status() -> str:
@@ -220,6 +475,18 @@ async def check_model_status() -> str:
             status_parts.append(f"🔗 Provider: {metadata['embedding_provider']}")
     else:
         status_parts.append("❌ Embeddings not loaded")
+    
+    if embeddings_semantic is not None and metadata_semantic is not None:
+        status_parts.append("✅ Semantic embeddings loaded successfully!")
+        status_parts.append(f"📊 Semantic dataset: {len(metadata_semantic['instructions'])} examples")
+    else:
+        status_parts.append("❌ Semantic embeddings not loaded")
+    
+    if embeddings_PropMeth is not None and metadata_PropMeth is not None:
+        status_parts.append("✅ Property/Method embeddings loaded successfully!")
+        status_parts.append(f"📊 Property/Method dataset: {len(metadata_PropMeth['instructions'])} examples")
+    else:
+        status_parts.append("❌ Property/Method embeddings not loaded")
     
     # Debug API key
     api_key_env = os.getenv('OPENAI_API_KEY')

@@ -36,6 +36,7 @@ namespace execu_template
     static void Execute(Application app)
     {
       // TODO: Add your code here.
+      // The Eclipse environment runs a c# version 5.0. This means some c# functionality does not work. For example string interpolation requires string.Format("Hello, {0}!", name), not $.
       // Remember to use the following command if making changes
       // context.Patient.BeginModifications();
     }
