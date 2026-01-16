@@ -141,6 +141,12 @@ Check if the embedding model has finished loading.
 
 ## 📁 Project Structure
 
+
+NOTE: I have not included the templates/embeddings/data/ Folders in this Repo due to ESAPI requiring a license.
+If you want these please get in touch.
+
+The "embed_instructions.py" can be used to create your own embeddings for Question Answer pairs.
+
 ```
 esapi-mcp-server/
 ├── src/
@@ -166,7 +172,7 @@ This project uses [UV](https://docs.astral.sh/uv/) for fast dependency managemen
 
 ```bash
 # Install development dependencies
-uv sync --dev
+uv sync
 
 # Run the server
 uv run python src/mcp_server.py
