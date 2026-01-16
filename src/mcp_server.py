@@ -404,6 +404,9 @@ async def general_query_semantic(query: str) -> str:
     except Exception as e:
         print(f"Error in search_api_examples: {str(e)}", file=sys.stderr)
         return f"Error processing query: {str(e)}"
+        
+
+
 
 @mcp.tool()
 async def search_property_method_details(query: str) -> str:
